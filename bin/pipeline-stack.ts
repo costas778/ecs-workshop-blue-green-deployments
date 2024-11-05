@@ -34,37 +34,31 @@ export class BlueGreenPipelineStack extends Stack {
             description: 'TaskSet termination time in minutes',
         });
 
-        // Build the stack
         const ecsBlueGreenCluster = new EcsBlueGreen.EcsBlueGreenCluster(this, 'EcsBlueGreenCluster', {
             cidr: process.env.CIDR_RANGE,
         });
 
-        // Define the source output artifact
         const sourceOutput = new codepipeline.Artifact();
 
-        // Create GitHub source action
         const sourceAction = new codepipeline_actions.GitHubSourceAction({
             actionName: 'Checkout',
-            owner: 'costas778', // Replace with your GitHub username
-            repo: 'ecs-workshop-blue-green-deployments', // Replace with your repository name
-            oauthToken: secretsmanager.Secret.fromSecretNameV2(this, 'GithubToken', 'my-github-token'), // Make sure to set this in Secrets Manager
+            owner: 'costas778',
+            repo: 'ecs-workshop-blue-green-deployments',
+            oauthToken: secretsmanager.Secret.fromSecretNameV2(this, 'GithubToken', 'my-github-token'),
             output: sourceOutput,
-            branch: 'main', // Replace with your target branch if different
+            branch: 'main',
         });
 
-        // Create the CodePipeline
         const pipeline = new codepipeline.Pipeline(this, 'Pipeline', {
             pipelineName: 'BlueGreenDeploymentPipeline',
             restartExecutionOnUpdate: true,
         });
 
-        // Add the source stage to the pipeline
         pipeline.addStage({
             stageName: 'Source',
             actions: [sourceAction],
         });
 
-        // Create the blue/green deployment pipeline
         new EcsBlueGreen.EcsBlueGreenPipeline(this, 'EcsBlueGreenPipeline', {
             apiName: process.env.API_NAME,
             deploymentConfigName: deploymentConfigName.valueAsString,
@@ -76,7 +70,7 @@ export class BlueGreenPipelineStack extends Stack {
             codeRepoName: process.env.CODE_REPO_NAME,
             ecsTaskRoleArn: process.env.ECS_TASK_ROLE_ARN,
             taskSetTerminationTimeInMinutes: taskSetTerminationTimeInMinutes.valueAsNumber,
-            sourceOutput: sourceOutput, // Pass the source output artifact to your deployment
+            sourceOutput: sourceOutput,
         });
     }
 }
