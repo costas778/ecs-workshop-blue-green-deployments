@@ -9,46 +9,22 @@ GREEN="\033[1;32m"
 YELLOW="\033[1;33m"
 
 #############################################################################
-# CodePipeline resources
+# Container image resources
 ##############################################################################
+echo -e "${GREEN}Start building the container image stack resources...."
 
-echo -e "${GREEN}Exporting the cloudformation stack outputs...."
-
+# Set AWS account and region environment variables
 export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
 export AWS_DEFAULT_REGION=$(aws configure get region)
 
-export CODE_REPO_NAME=$(aws cloudformation describe-stacks --stack-name BlueGreenContainerImageStack --query 'Stacks[*].Outputs[?ExportName==`repositoryName`].OutputValue' --output text)
-export CODE_REPO_URL=$(aws cloudformation describe-stacks --stack-name BlueGreenContainerImageStack --query 'Stacks[*].Outputs[?ExportName==`repositoryCloneUrlHttp`].OutputValue' --output text)
-export ECR_REPO_NAME=$(aws cloudformation describe-stacks --stack-name BlueGreenContainerImageStack --query 'Stacks[*].Outputs[?ExportName==`ecrRepoName`].OutputValue' --output text)
-export CODE_BUILD_PROJECT_NAME=$(aws cloudformation describe-stacks --stack-name BlueGreenContainerImageStack --query 'Stacks[*].Outputs[?ExportName==`codeBuildProjectName`].OutputValue' --output text)
-export ECS_TASK_ROLE_ARN=$(aws cloudformation describe-stacks --stack-name BlueGreenContainerImageStack --query 'Stacks[*].Outputs[?ExportName==`ecsTaskRoleArn`].OutputValue' --output text)
+# Define the GitHub repository name here (replace 'nginx-sample' if needed)
+export CODE_REPO_NAME=nginx-sample
 
-echo -e "${GREEN}Initiating the code build to create the container image...."
-export BUILD_ID=$(aws codebuild start-build --project-name $CODE_BUILD_PROJECT_NAME --query build.id --output text)
-BUILD_STATUS=$(aws codebuild batch-get-builds --ids $BUILD_ID --query 'builds[*].buildStatus' --output text | xargs)
+# Bootstrap the AWS environment for CDK deployments
+cdk bootstrap aws://$AWS_ACCOUNT_ID/$AWS_DEFAULT_REGION
 
-# Wait till the CodeBuild status is SUCCEEDED
-while [ "$BUILD_STATUS" != "SUCCEEDED" ];
-do
-  sleep 10
-  BUILD_STATUS=$(aws codebuild batch-get-builds --ids $BUILD_ID --query 'builds[*].buildStatus' --output text | xargs)
-  echo -e "${YELLOW}Awaiting SUCCEEDED status....Current status: ${BUILD_STATUS}"
-done
+# Deploy the stack using CDK with GitHub as the source repository
+# Ensure that 'bin/container-image-stack.ts' references the correct GitHub configuration
+cdk --app "npx ts-node bin/container-image-stack.ts" deploy --require-approval never
 
-echo -e "${GREEN}Completed CodeBuild...ECR image is available"
-
-echo -e "${GREEN}Start building the CodePipeline resources...."
-
-export API_NAME=nginx-sample
-export CONTAINER_PORT=80
-export CIDR_RANGE=10.0.0.0/16
-
-cdk --app "npx ts-node bin/pipeline-stack.ts" deploy --require-approval never
-export ALB_DNS=$(aws cloudformation describe-stacks --stack-name BlueGreenPipelineStack --query 'Stacks[*].Outputs[?ExportName==`ecsBlueGreenLBDns`].OutputValue' --output text)
-
-echo -e "${GREEN}Completed building the CodePipeline resources...."
-
-echo -e "${GREEN}Let's curl the below URL for API...."
-
-echo "http://$ALB_DNS"
-curl http://$ALB_DNS
+echo -e "${GREEN}Completed building the container image stack resources...."
